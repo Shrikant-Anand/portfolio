@@ -1,0 +1,1032 @@
+---
+title: <span style="color:#0000FF">Predictive Modelling</span>
+author: <span style="color:#0000FF">Shrikant Anand</span>
+date: "17/03/2023"
+output: 
+  html_document:
+    theme: yeti
+    highlight: tango
+    fig_width: 8
+    fig_height: 7
+    fig_caption: true
+    code_folding: hide
+    number_sections: true
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: false
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{=html}
+<style>
+body {text-align: justify}
+</style>
+```
+Cargando algunas librerías.
+
+```{r}
+rm(list = ls())
+suppressWarnings(suppressPackageStartupMessages(library(PerformanceAnalytics)))
+suppressWarnings(suppressPackageStartupMessages(library(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(library(skimr)))
+suppressWarnings(suppressPackageStartupMessages(library(funModeling)))
+suppressWarnings(suppressPackageStartupMessages(library(nortest)))
+suppressWarnings(suppressPackageStartupMessages(library(lmtest)))
+suppressWarnings(suppressPackageStartupMessages(library(fitdistrplus)))
+suppressWarnings(suppressPackageStartupMessages(library(leaps)))
+suppressWarnings(suppressPackageStartupMessages(library(ResourceSelection)))
+suppressWarnings(suppressPackageStartupMessages(library(rcompanion)))
+suppressWarnings(suppressPackageStartupMessages(library(glmnet)))
+suppressWarnings(suppressPackageStartupMessages(library(car)))
+suppressWarnings(suppressPackageStartupMessages(library(MASS)))
+suppressWarnings(suppressPackageStartupMessages(library(lme4)))
+suppressWarnings(suppressPackageStartupMessages(library(lmerTest)))
+suppressWarnings(suppressPackageStartupMessages(library(agricolae)))
+suppressWarnings(suppressPackageStartupMessages(library(gvlma)))
+suppressWarnings(suppressPackageStartupMessages(library(Metrics)))
+```
+
+# - [Ejercicio 1]{style="color:#D35400"}
+
+Instale y active la librería ISLR.
+Acceda a la base de datos Auto y realice un sumario estadístico de su contenido.
+
+<hr>
+
+[**Conjunto de datos "Auto"**]{.ul}
+
+Consumo de gasolina, potencia y otra información de 392 vehículos.
+Un conjunto de datos con 392 observaciones sobre las 9 variables siguientes:
+
+-   **mpg** : millas por galón
+
+-   **cylinders** : Número de cilindros entre 3 y 8
+
+-   **displacement** : Desplazamiento del motor (pulgadas cúbicas)
+
+-   **horsepower** : Caballos de vapor del motor
+
+-   **weight** : Peso del vehículo (lbs.)
+
+-   **acceleration** : Tiempo de aceleración de 0 a 60 mph (s)
+
+-   **year** : Año del modelo (módulo 100)
+
+-   **origin** : Origen del coche (1. Americano, 2. Europeo, 3. Japonés)
+
+-   **name** : Nombre del vehículo
+
+La función summary() nos proporciona información básica sobre la base de datos, como el rango, la media y la mediana de las variables.
+También vemos la estructura de la base de datos.
+Finalmente, vemos las correlaciones entre variables.
+Observamos que existe una alta correlación entre muchas variables.
+Tendremos esto en cuenta a la hora de hacer regresiones e intentaremos tratarlo de una manera eficaz.También podemos observar que no hay entradas duplicadas.
+
+```{r}
+library(ISLR)   #instalamos librería
+
+datos = Auto    #importamos los datos
+
+summary(datos)  #vemos el resumen estadístico
+```
+
+```{r}
+str(datos)
+```
+
+```{r}
+anyDuplicated(datos)
+```
+
+
+```{r}
+datos = subset(datos, select =c("mpg","cylinders","displacement","horsepower","weight","acceleration","year","origin")) #creamos subconjuntos de variables para ver las correlaciones
+chart.Correlation(datos)
+```
+
+# - [Ejercicio 2]{style="color:#D35400"}
+
+Estime un modelo lineal simple entre el consumo de gasolina, en millas por galón (mpg_i), y el tamaño del motor (o cilindrada) medido en pulgadas cúbicas (displacement_i) y responda qué efecto tiene la potencia del coche en el consumo de gasolina.
+Estime un segundo modelo lineal simple entre consumo de combustible y el peso del vehículo (weight_i) y explique qué efecto tiene el peso del coche en el consumo de esta muestra de automóviles.
+
+<hr>
+
+<h4 style="color:#0000FF">
+
+mpg\~displacement
+
+</h4>
+
+El coeficiente para la variable displacement representa el cambio en el mpg asociado con un aumento de una unidad en el displacement, manteniendo todas las demás variables constantes.
+El coeficiente negativo indica que a medida que aumenta el tamaño del motor, disminuye el mpg (consumo de gasolina).
+Para un aumento de una unidad en displacement, mpg disminuye en 0,06005.
+También podemos observar que no hay normalidad entre los residuos en este modelo, lo cual puede ser confirmado por la prueba de Lillie.
+
+$$ \text{mpg} = 35.12064 - 0.06005 \times \text{displacement} $$
+
+```{r}
+mod1 = lm(mpg ~ displacement, data = datos)
+summary(mod1)
+plot(fitdist(mod1$residuals,distr = 'norm'))
+lillie.test(mod1$residuals)
+```
+
+<h4 style="color:#0000FF">
+
+mpg\~weight
+
+</h4>
+
+Este modelo también presenta resultados similares.
+El coeficiente negativo de la variable weight indica que al aumentar weight en una unidad, mpg disminuye en un factor de 0,007647.Aquí también podemos observar que no hay normalidad entre los residuos en este modelo, lo que puede ser confirmado por la prueba de Lillie.
+$$ \text{mpg} = 46.216524 -0.007647 \times \text{weight} $$
+
+```{r}
+mod2 = lm(mpg ~ weight, data = datos)
+summary(mod2)
+plot(fitdist(mod2$residuals,distr = 'norm'))
+lillie.test(mod2$residuals)
+```
+
+# - [Ejercicio 3]{style="color:#D35400"}
+
+Calcule intervalos de confianza para los parámetros β_0,β_1 en el modelo que relaciona el consumo de gasolina y el tamaño del motor, utilizando el Valor crítico para un α=0.10 (utilice la función qt y consulte su ayuda para obtener el valor crítico)
+
+<hr>
+
+<h4 style="color:#0000FF">
+
+Intervalos de confianza
+
+</h4>
+
+Obtenemos el intervalo de confianza para β_1 y β_0.
+
+Como vemos, estos valores, a este nivel de confianza, oscilan entre -0,06292703 y -0,05717583 para β_1 y entre 34,48593 y 35,75535 para β_0.
+
+```{r}
+#el valor crítico puede calcularse así utilizando qt()
+qt(0.90, mod1$df.residual)
+
+#intervalos de confianza para β_1(displacement)
+c(summary(mod1)$coefficients[2,1]-qt(0.90,mod1$df.residual)*summary(mod1)$coefficients[2,2], summary(mod1)$coefficients[2,1]+qt(0.90,mod1$df.residual)*summary(mod1)$coefficients[2,2])
+
+#intervalos de confianza para β_0
+c(summary(mod1)$coefficients[1,1]-qt(0.90,mod1$df.residual)*summary(mod1)$coefficients[1,2], summary(mod1)$coefficients[1,1]+qt(0.90,mod1$df.residual)*summary(mod1)$coefficients[1,2])
+
+```
+
+# - [Ejercicio 4]{style="color:#D35400"}
+
+Cree una base de datos con los siguientes valores de tamaño del motor = 80, 90, 100, 110, 120, y de peso = 1500, 1600, 1700, 1800, 1900 y realice un pronóstico del consumo, incluyendo un intervalo de predicción con un α=0.05.
+
+<hr>
+
+<h4 style="color:#0000FF">
+
+Pronóstico del consumo
+
+</h4>
+
+Creamos un nuevo conjunto de datos.
+
+```{r}
+
+ndatos <- data.frame(displacement = c(80, 90, 100, 110, 120),
+                       weight = c(1500, 1600, 1700, 1800, 1900))
+```
+
+Predecimos el consumo (mpg) basándonos en displacement a partir de nuevos datos.
+
+```{r}
+predict(mod1, newdata = ndatos, interval = "prediction", level = 0.95)
+```
+
+Predecimos el consumo (mpg) basándonos en weight a partir de nuevos datos.
+
+```{r}
+predict(mod2, newdata = ndatos, interval = "prediction", level = 0.95)
+```
+
+# - [Ejercicio 5]{style="color:#D35400"}
+
+Realice una selección de variables en el modelo del punto anterior utilizando el método "backward" (no incluya name en el conjunto de variables explicativas), y realice una estimación utilizando la función lm del que considere mejor modelo.
+Presente el sumario de resultados de dicha regresión y valore los resultados obtenidos.
+
+<hr>
+
+<h4 style="color:#0000FF">
+
+Utilizando el método "backward"
+
+</h4>
+
+Aquí se excluye la variable "Name" por razones obvias.
+Incluyo la variable "origin" como un factor ya que podría ser útil porque los coches de diferentes países pueden tener diferentes valores medios de mpg debido a factores como las regulaciones gubernamentales, las preferencias culturales y los avances tecnológicos.
+No voy a tratar la variable "year" como un factor ya que tratarlo como una variable categórica con niveles desordenados puede no tener sentido porque los años en el conjunto de datos tienen un orden natural.
+
+```{r}
+X <- model.matrix(mpg ~ cylinders+displacement+horsepower+weight+acceleration+year+as.factor(origin), data = datos)
+y <- datos$mpg
+
+backward <- regsubsets(X, y, method = "backward")
+summary(backward)
+```
+
+```{r}
+coef(backward, 1:8)
+```
+
+Basándonos en los resultados anteriores, seleccionamos las mejores variables y comprobamos sus resultados.
+
+```{r}
+summary(lm(mpg ~ cylinders+displacement+horsepower+weight+acceleration+year+as.factor(origin), data = datos))
+plot((lm(mpg ~ cylinders+displacement+horsepower+weight+acceleration+year+as.factor(origin), data = datos)),1)
+```
+
+En el modelo anterior podemos ver que cylinders,horsepower,acceleration no son significativos.
+También ya que están altamente correlacionados, los eliminamos y observamos el cambio.
+
+```{r}
+summary(lm(mpg ~ weight + year+as.factor(origin)+displacement, data = datos))
+```
+
+Según los resultados, el valor de R-cuadrado no disminuye demasiado.
+Sólo el displacement no es significativo, por lo que podemos eliminarlo.
+
+```{r}
+summary(lm(mpg ~ weight + year+as.factor(origin), data = datos))
+summary(aov(lm(mpg ~ weight + year+as.factor(origin), data = datos)))
+
+```
+
+Aquí observamos que todas las variables son significativas y el valor R-cuadrado es similar al del modelo anterior.
+Ahora comprobamos la hipótesis.
+
+```{r}
+plot(fitdist((lm(mpg ~ weight + year+as.factor(origin), data = datos))$residuals,distr = "norm"))
+lillie.test((lm(mpg ~ weight + year+as.factor(origin), data = datos))$residuals) 
+```
+
+Comprobamos la normalidad de los residuos y observamos que el QQ-plot, P-P plot y la prueba de Lillie indican que no hay normalidad entre los residuos.
+Por lo que podemos utilizar la transformación de Boxcox.
+
+<h4 style="color:#0000FF">
+
+Boxcox para mpg:
+
+</h4>
+
+```{r}
+library(EnvStats)
+boxcox.list<-boxcox(datos$mpg)
+plot(boxcox.list, plot.type="Q-Q Plots")
+lambda<-boxcox(datos$mpg, optimize=TRUE)$lambda
+lambda
+```
+
+Como lambda es cercano a 0, podemos tomar logaritmos en la variable.
+
+Aquí usamos log() para mpg.
+Podemos ver que todas las variables son significativas.También han mejorado el valor R-cuadrado y el estadístico F del modelo.El valor ajustado de R-cuadrado de 0,8748 indica que el modelo explica el 87,48% de la varianza en mpg, lo que representa un ajuste realmente bueno.
+
+Ahora comprobamos la hipótesis
+
+```{r}
+mod3 = lm(log(mpg) ~ weight + year+as.factor(origin), data = datos)
+summary(mod3)
+summary(aov(mod3))
+```
+
+Observamos los gráficos de residuos, y estos nos indican que existe normalidad entre los residuos.
+Los Q-Q y P-P plot parecen estar alineados con la línea recta.
+La normalidad en los residuos puede confirmarse mediante la prueba de Lillie.
+
+Cuando representamos gráficamente los residuos podemos observar que están uniformemente distribuidos, lo que demuestra homocedasticidad.
+Esto puede confirmarse con la salida de gvlma(). También el resultado de la prueba de Levene muestra que se cumple la hipótesis de homogeneidad de varianzas.
+
+Incluso cuando hay correlaciones muy altas entre las diferentes variables del conjunto de datos, el resultado de vif() muestra que la multicolinealidad entre los regresores es baja.
+
+Sin embargo, no se cumplen algunos otros supuestos.
+Aun así, este modelo parece ajustarse bien.
+
+```{r}
+plot(fitdist(mod3$residuals,distr = 'norm')) #normalidad
+lillie.test(mod3$residuals) #normalidad
+plot(mod3$residuals) #homocedasticidad
+summary(gvlma(mod3)) #homocedasticidad
+leveneTest(datos$mpg,as.factor(datos$origin))
+vif(mod3) #multicolinealidad
+```
+
+```{r}
+pred <- exp(predict(mod3))
+
+library(ggplot2)
+ggplot(data = datos,aes(x = datos$mpg, y = pred)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, color = "red") + 
+  labs(x = "Actual mpg", y = "Predicho mpg")
+```
+
+# - [Ejercicio 6]{style="color:#D35400"}
+
+Realice un modelo ANOVA explicativo del consumo de gasolina utilizando como factor la cilindrada, obtenga las medias por grupo y pruebe la hipótesis de homocedasticidad.
+Incluya como covariable los caballos de vapor y comente los resultados obtenidos.
+
+<hr>
+
+<h4 style="color:#0000FF">
+
+ANOVA - La cilindrada como factor
+
+</h4>
+
+Antes de continuar, como podemos observar que el número de observaciones de los cilindros nivel 3 y 5 es muy bajo, y ya que puede crear problemas en nuestro análisis debido al número muy bajo de observaciones, los eliminaremos de nuestros cálculos para este ejercicio.
+
+```{r}
+table(datos$cylinders)
+datos_cyl <- subset(datos, cylinders %in% c(4,6,8))
+table(datos_cyl$cylinders)
+```
+
+Realizamos el ANOVA y visualizamos las medias de cada grupo mediante una tabla y un boxplot.
+Podemos ver que el número de cilindros tiene un valor p muy pequeño, lo que indica que es significativo para determinar el consumo (mpg) de un coche.
+También obtenemos las medias por grupos y observamos que hay diferencia en las medias de los distintos grupos.
+
+```{r}
+datos_cyl$cylinders = as.factor(datos_cyl$cylinders)#convertimos cylinders a factores
+ANOVA = aov(mpg~cylinders,data = datos_cyl)
+model.tables(ANOVA, type="means")
+```
+
+```{r}
+ggplot(datos_cyl, aes(cylinders, mpg)) + geom_boxplot()
+```
+
+```{r}
+summary(lm(mpg~cylinders,data = datos_cyl))
+```
+
+Como podemos observar que el valor de p para todos los factores es inferior a 0,05, podemos concluir que no hay normalidad.
+
+```{r}
+MPG <- split(datos_cyl$mpg, datos_cyl$cylinders)
+
+for (i in 1:length(MPG)){
+  MPG.i <- as.vector(MPG[i])
+  print(MPG.i)
+  print(lillie.test(MPG.i[[1]]))
+}
+```
+
+Comprobamos la hipótesis de homocedasticidad.
+Observamos que el Q-Q plot y el P-P plot de los residuos se desvían de la línea diagonal, lo que indica falta de normalidad.
+El resultado de la prueba de levene indica que el valor p es inferior a 0,001, lo que proporciona pruebas concluyentes contra la hipótesis nula de varianzas iguales.
+Por lo tanto, podemos concluir que existe una heteroscedasticidad significativa.
+
+```{r}
+plot(fitdist(lm(mpg~cylinders,data = datos_cyl)$residuals,distr = 'norm'))
+leveneTest(datos_cyl$mpg,datos_cyl$cylinders, center = mean)
+```
+
+<h4 style="color:#0000FF">
+
+ANCOVA - covariable los caballos de vapor
+
+</h4>
+
+Ahora incluimos "horsepower" como covariable.
+
+Los resultados muestran que tanto el número de "cylinders" como el "horsepower" tienen cierta importancia a la hora de determinar el consumo(mpg) de un coche.
+
+También observamos que aumenta el valor R-cuadrado del modelo en comparación con el modelo anterior.
+Aún así, este modelo no es bueno en la determinación de mpg ya que todavía tiene falta de normalidad y tiene heteroscedasticidad grave como puede confirmarse por diferentes gráficos de sus residuos y por la prueba de Lillie.
+
+```{r}
+mod4 = lm(mpg ~ cylinders + horsepower, data = datos_cyl)
+anova(mod4)
+summary(mod4)
+plot(fitdist(mod4$residuals,distr = 'norm'))
+lillie.test(mod4$residuals)
+plot(mod4$residuals)
+```
+
+# - [Ejercicio 7]{style="color:#D35400"}
+
+Estime un modelo lineal múltiple entre el consumo de gasolina, en millas por galón (mpg_i), el tamaño del motor medido en pulgadas cúbicas (displacement_i) y el peso del vehiculo (weight_i) ¿encuentra algún problema en el planteamiento de esta regresión?,
+si es asi resuélvalo y analice los resultados obtenidos.
+
+<hr>
+
+<h4 style="color:#0000FF">
+
+mpg \~ displacement + weight
+
+</h4>
+
+Tomamos displacement y weight como predictores para predecir mpg.
+En este modelo vemos que displacement y weight son significativos, pero los gráficos de los residuos y la prueba de Lillie muestran que no hay normalidad entre los residuos, lo que podría deberse a la alta correlación entre los regresores.
+Esto se confirma por vif().
+Existe una correlación de 0,932 entre displacement y weight lo cual es muy alta.
+Como la forma más común de resolver esto es eliminar uno de los regresores altamente correlacionados, pero en este caso sólo hay dos regresores y no parece una buena idea eliminar alguno de los dos.
+Por lo tanto, vamos a considerar hacer ajuste Ridge para resolver el problema de la multicolinealidad.
+
+```{r}
+mod5 <- lm(mpg ~ displacement + weight, data = datos)
+summary(mod5)
+```
+
+```{r}
+plot(fitdist(mod5$residuals,distr = 'norm'))
+lillie.test(mod5$residuals)
+```
+
+```{r}
+vif(mod5)
+```
+
+```{r}
+cor(datos$displacement,datos$weight)
+```
+
+<h4 style="color:#0000FF">
+
+Regresión Ridge
+
+</h4>
+
+Realización del ajuste Ridge
+
+```{r}
+x <- model.matrix(mpg~displacement+weight, data =datos)[, -1]
+head(x) 
+y <- datos$mpg
+```
+
+```{r}
+modeloRidge <- glmnet(x,y,alpha=0)
+plot(modeloRidge,xvar="lambda",label=TRUE)
+```
+
+Buscamos mejor lambda
+
+```{r}
+set.seed(1)
+out=cv.glmnet(x,y,alpha=0)
+mejorlambda=out$lambda.min
+mejorlambda
+```
+
+```{r}
+mod6 <- glmnet(x,y,alpha=0, lambda=mejorlambda)
+coef(mod6)
+```
+
+Podemos ver que ahora los coeficientes estimados se acercan a 0.
+Los coeficientes reducidos se deben a la penalización de Ridge que se añade a la suma de errores al cuadrado.
+La penalización de Ridge fomenta que los coeficientes de regresión sean pequeños y distribuye la importancia de los predictores de forma más uniforme en el modelo.
+Estos coeficientes regularizados son más estables que los del modelo MCO.
+
+
+```{r}
+predichos <- predict.glmnet(mod6, x, type = "response")
+plot(y)
+lines(predichos)
+```
+
+```{r}
+rmse(predichos, datos$mpg)
+```
+
+# - [Ejercicio 8]{style="color:#D35400"}
+
+Con el mejor modelo explicativo del consumo de gasolina (millas/galón) de los vehículos, realice una estimación robusta, represéntela gráficamente y comente los resultados.
+
+<hr>
+
+Considerando todos los modelos que hemos hecho hasta ahora para predecir el consumo de un coche (mpg), algunos modelos tienen un solo regresor que yo no consideraría apropiado para usar ya que tenemos más variables en nuestro conjunto de datos que son significativos en la predicción de "mpg".
+El modelo que desarrollamos anteriormente (mod6), incluso después de realizar el ajuste de Ridge, no lo consideraría como el mejor para predecir el mpg debido a la alta correlación entre los regresores y también podría haber un problema de sobreajuste (overfitting).
+El modelo que realizamos por el método "backward" (mod3) parece dar el mejor resultado basado en sus parámetros.
+Por tanto, utilizaremos las variables de mod3.
+
+<h4 style="color:#0000FF">
+
+Regresión robusta
+
+</h4>
+
+Hacemos estimaciones robustas
+
+Si observamos el diagrama de influencias, parece que hay pocas observaciones influyentes.
+
+```{r}
+influenceIndexPlot(mod3, vars="Cook")
+summary(influence.measures(mod3))
+```
+
+```{r}
+plot(cooks.distance(mod3))
+```
+
+<h4 style="color:#0000FF">
+
+Estimador Huber
+
+</h4>
+
+Realizamos una regresión robusta utilizando el método de Huber. Después comprobamos la normalidad.
+
+```{r}
+mod7 = rlm(log(mpg)~weight+year+as.factor(origin),data = datos)
+summary(mod7)
+plot(mod7)
+plot(fitdist(mod7$residuals,distr = 'norm'))
+lillie.test(mod7$residuals)
+```
+
+<h4 style="color:#0000FF">
+
+Estimador bisquare
+
+</h4>
+
+Realizamos una regresión robusta utilizando el método bisquare. Después comprobamos la normalidad.
+
+```{r}
+mod8 = rlm(log(mpg)~weight+year+as.factor(origin),data = datos, psi = psi.bisquare)
+summary(mod8)
+plot(mod8)
+plot(fitdist(mod8$residuals,distr = 'norm'))
+lillie.test(mod8$residuals)
+```
+
+Después de hacer estimaciones robustas con dos métodos (Huber y bisquare), podemos ver que ambos métodos tienen bajo error residual.
+Ambos métodos dieron resultados similares.
+Se puede observar que no hay normalidad entre los residuos.
+
+# - [Ejercicio 9]{style="color:#D35400"}
+
+Con el mismo modelo, realice una estimación utilizando la regresión bayesiana, y responda razonadamente por cuál de los tres modelos (inicial, robusto, bayesiano) optaría como modelo final.
+
+<hr>
+
+<h4 style="color:#0000FF">
+
+Regresión Bayesiana
+
+</h4>
+
+Utilizamos la librería MCMCpack para realizar la regresión bayesiana y representamos gráficamente el modelo.
+
+```{r}
+library(MCMCpack)
+modeloRB = MCMCregress (log(mpg) ~ weight + year+as.factor(origin), data = datos)
+summary(modeloRB)
+```
+
+Aquí, cada fila corresponde a un parámetro, por lo que hay dos gráficos para cada parámetro.
+El gráfico de la izquierda se denomina trace plot y muestra los valores que tomó el parámetro durante la ejecución de la cadena.
+El gráfico de la derecha se denomina gráfico de densidad marginal.
+Básicamente, es el histograma (suavizado) de los valores del trace plot, es decir, la distribución de los valores del parámetro en la cadena.
+Los trace plot muestran una buena mezcla, lo que indica que más iteraciones no son necesarias para garantizar que la distribución se ha representado con precisión.
+
+```{r}
+plot(modeloRB)
+```
+
+Ahora comparamos algunas métricas de los modelos (inicial, dos de robusto, bayesiano):
+
+-   **MCO**
+
+```{r}
+AIC(mod3)
+
+BIC(mod3)
+# Error residual
+sqrt(sum(mod3$residual^2) / mod3$df.residual)
+```
+
+-   **Regresión robusta Huber**
+
+```{r}
+#AIC
+AIC(mod7)
+#BIC
+BIC(mod7)
+# Error residual
+summary(mod7)["sigma"]
+```
+
+-   **Regresión robusta bisquare**
+
+```{r}
+#AIC
+AIC(mod8)
+#BIC
+BIC(mod8)
+# Error residual
+summary(mod8)["sigma"]
+```
+
+-   **Bayesiano**
+
+```{r}
+#R-cuadrado
+library(broom)
+library(broom.mixed)
+mcmc <- modeloRB
+Xmat = model.matrix(log(mpg) ~ weight + year+as.factor(origin), data = datos)
+coefs = mcmc[, c("(Intercept)", "weight", "year", "as.factor(origin)2", "as.factor(origin)3")]
+fit = coefs %*% t(Xmat)
+resid = sweep(fit, 2, datos$mpg, "-")
+var_f = apply(fit, 1, var)
+var_e = apply(resid, 1, var)
+R2 = var_f/(var_f + var_e)
+tidyMCMC(as.mcmc(R2), conf.int = TRUE, conf.method = "HPDinterval")
+```
+
+```{r}
+# Error residual Bayesiano
+sqrt(mean(modeloRB[,6]))
+```
+
+Observamos los cuatro modelos anteriores y concluimos:
+
+En las estimaciones robustas, los errores residuales son bajos, pero los modelos no muestran signos de normalidad entre sus residuos, por lo que no pueden considerarse aptos para predecir el mpg.
+
+Ahora si comparamos el modelo bayesiano (modeloRB) con el modelo MCO (mod3), el error residual de ambos modelos es prácticamente el mismo.
+La R cuadrada estimada del modelo Bayesiano es muy pequeña, lo que indica que los predictores del modelo no explican una gran proporción de la varianza en la variable de respuesta (mpg).
+Por lo tanto, el modelo bayesiano no es una buena opción para predecir el consumo (mpg) de un coche.
+
+El mod3(MCO) muestra normalidad entre los residuos y también tiene homocedasticidad y no muestra alta multicolinealidad.
+Se comporta mejor que otros modelos, ya que explica el 87,61% de la varianza en la determinación del consumo (mpg) de combustible de un coche.
+Por lo tanto, yo elegiría **mod3 (MCO)** para predecir mpg.
+
+```{r}
+pred <- exp(predict(mod3))
+
+library(ggplot2)
+ggplot(data = datos,aes(x = datos$mpg, y = pred)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, color = "red") + 
+  labs(x = "Actual mpg", y = "Predicho mpg")
+```
+
+# - [Ejercicio 10]{style="color:#D35400"}
+
+Realice una estimación no lineal entre el consumo de gasolina, en millas por galón (mpg_i), y los caballos de vapor del vehiculo (horsepower_i).
+Utilice bases polinómicas y splines.
+Encuentre el mejor modelo con ambas tecnicas, y compare sus resultados.
+
+<hr>
+
+<h4 style="color:#0000FF">
+
+[**Ajustes Polinómicos**]{.ul}
+
+</h4>
+
+En primer lugar, vamos a representar los datos originales.
+
+Observamos que no se trata de una línea recta, por lo que podemos continuar con los ajustes polinómicos.
+
+```{r}
+plot(datos$horsepower, datos$mpg, xlab = "Horsepower", ylab = "MPG")
+
+```
+
+```{r}
+modelo2 <- lm(formula = mpg ~ poly(horsepower, 2),datos)
+summary(modelo2)
+
+```
+
+```{r }
+modelo3 <- lm(formula = mpg ~ poly(horsepower, 3),datos)
+summary(modelo3)
+
+```
+
+```{r  }
+modelo4 <- lm(formula = mpg ~ poly(horsepower, 4),datos)
+summary(modelo4)
+
+```
+
+```{r}
+
+anova(modelo2, modelo3, modelo4)
+```
+
+Seleccionamos el modelo2 porque todos los factores son significativos.
+
+Ahora lo representamos frente a los valores originales.
+
+```{r }
+plot(x=datos$horsepower, y=datos$mpg, main=" Horsepower vs mpg", pch=20, col = "red")
+points(datos$horsepower, fitted(modelo2), col='blue', pch=20)
+```
+
+```{r}
+
+plot(fitdist(modelo2$residuals,distr = 'norm'))
+lillie.test(modelo2$residuals)
+```
+
+Podemos observar que el modelo anterior no muestra signos de normalidad.
+Se puede confirmar leyendo los gráficos e interpretando los resultados de la prueba de Lillie.
+
+<h4 style="color:#0000FF">
+
+[**Splines**]{.ul}
+
+</h4>
+
+Para ello utilizamos la librería splines
+
+1.  **Spline cúbica**
+
+Para ello utilizamos la función bs().
+
+```{r}
+library(splines)
+
+modspline <- lm(mpg ~ bs(horsepower,knots=c(100,150,200),degree=3),data=datos)
+summary(modspline)
+
+```
+
+```{r}
+rango <- range(datos$horsepower)
+npuntos <- seq(from = rango[1], to = rango[2], by = 0.5)
+npuntos <- data.frame(horsepower = npuntos)
+npredic  <- predict(modspline, newdata = npuntos, se.fit = TRUE, level = 0.95)
+```
+
+```{r}
+intconf <- data.frame(
+                  inferior = npredic$fit - 1.96*npredic$se.fit,
+                  superior = npredic$fit + 1.96*npredic$se.fit)
+```
+
+```{r}
+plot(x = datos$horsepower, y =datos$mpg, pch = 20, col = "red")
+title("Spline cúbica, nodos: 100, 150, 200")
+lines(x = npuntos$horsepower, npredic$fit, col = "green", lwd = 2)
+lines(x = npuntos$horsepower, intconf$inferior, col = "blue",
+      lwd = 2, lty = 2)
+lines(x = npuntos$horsepower, intconf$superior, col = "blue", 
+      lwd = 2, lty = 2)
+legend("topright", 
+       legend = c("Spline Cúbica") 
+                  ,
+       col = c("green"), 
+       lwd = 2,
+       bty = "n")
+```
+
+Podemos observar que no existe normalidad entre los residuos.
+
+```{r}
+plot(fitdist(modspline$residuals,distr = 'norm'))
+lillie.test(modspline$residuals)
+```
+
+2.  **Spline Natural**
+
+Para ello utilizamos la función ns().
+
+```{r}
+modspline2 <- lm(mpg ~ ns(horsepower, knots=c(100,150,200)),data=datos)
+summary(modspline2)
+```
+
+```{r}
+rango2 <- range(datos$horsepower)
+npuntos2 <- seq(from = rango2[1], to = rango2[2], by = 0.5)
+npuntos2 <- data.frame(horsepower = npuntos2)
+
+npredic2  <- predict(modspline2, newdata = npuntos2, se.fit = TRUE, level = 0.95)
+```
+
+```{r}
+intconf2 <- data.frame(
+                  inferior = npredic2$fit - 1.96*npredic2$se.fit,
+                  superior = npredic2$fit + 1.96*npredic2$se.fit)
+```
+
+Representación conjunta de ambas splines.
+
+```{r}
+plot(x = datos$horsepower, y =datos$mpg, pch = 20, col = "red")
+title("Splines cúbica y natural, nodos: 100, 150, 200")
+lines(x = npuntos$horsepower, npredic$fit, col = "green", lwd = 2)
+lines(x = npuntos2$horsepower, npredic2$fit, col = "brown", lwd = 2)
+lines(x = npuntos$horsepower, intconf$inferior, col = "blue",
+      lwd = 2, lty = 2)
+lines(x = npuntos$horsepower, intconf$superior, col = "blue", 
+      lwd = 2, lty = 2)
+lines(x = npuntos2$horsepower, intconf2$inferior, col = "orange",
+      lwd = 2, lty = 2)
+legend("topright", 
+       legend = c("Spline Cúbica", 
+                  "Spline Natural"), 
+       col = c("green", "brown"), 
+       lwd = 2,
+       bty = "n")
+```
+
+En el gráfico anterior podemos ver cómo el spline natural (marrón) se hace un poco más plano hacia el final.
+También podemos observar que no existe normalidad entre los residuos.
+
+```{r}
+plot(fitdist(modspline2$residuals,distr = 'norm'))
+lillie.test(modspline2$residuals)
+```
+
+3.  **Smooth Splines**
+
+Para obtenerlo, utilizamos smooth.spline()
+
+```{r}
+modspline3 <- smooth.spline(datos$horsepower, datos$mpg) 
+modspline3$spar
+```
+
+```{r}
+plot(x = datos$horsepower, y =datos$mpg, pch = 20, col = "red")
+title("Smooth Spline")
+lines(modspline3, col = "red", lwd = 2)
+legend("topright", 
+       legend = c("Smooth Spline"), 
+                         col = c("red"), 
+       lwd = 2,
+       bty = "n")
+```
+
+Vemos que con el valor de **0.2648644**, la curva es muy ondulada.
+
+Cuando la curva es ondulada y no suave, significaría que está capturando el patrón demasiado de cerca y, por lo tanto, podría resultar en un sobreajuste (overfitting) que no es deseable en un modelo.
+
+Probamos con un valor de spar más bajo
+
+4.  Ajustamos con un spar de **0,10.**
+
+```{r}
+modspline4 <- smooth.spline(datos$horsepower, datos$mpg,spar=0.10) 
+modspline4$spar
+```
+
+```{r}
+plot(x = datos$horsepower, y =datos$mpg, pch = 20, col = "red")
+title("Smooth Spline")
+lines(modspline3, col = "red", lwd = 2)
+lines(modspline4, col = "yellow", lwd = 2)
+legend("topright", 
+       legend = c("smooth spline (spar =0,26)", 
+                  "smooth spline (spar =0,10)"), 
+       col = c("red", "yellow"), 
+       lwd = 2,
+       bty = "n")
+```
+
+
+La reducción del valor de spar hace que la curva se vuelva aún más ondulada.
+Se confirma que necesitamos un valor de spar por encima de 0,26 para obtener una curva suave.
+
+**Smooth spline, con spar ajustado**
+
+5.  Probamos ahora con el valor de spar ajustado: **0,65**.
+
+```{r}
+modspline5 <- smooth.spline(datos$horsepower, datos$mpg,spar=0.65) 
+modspline5$df
+modspline5$lambda
+modspline5$spar
+```
+
+Ahora la curva se ve más suave y perfecta.
+
+```{r}
+plot(x = datos$horsepower, y =datos$mpg, pch = 20, col = "red")
+title("Smooth Spline")
+lines(modspline3, col = "red", lwd = 2)
+lines(modspline5, col = "black", lwd = 2)
+legend("topright", 
+       legend = c("smooth spline (spar =0,26)", 
+                  "smooth spline (spar =0,65)"), 
+       col = c("red", "black"), 
+       lwd = 2,
+       bty = "n")
+```
+
+Como la curva se ve bien, probamos la normalidad y calculamos el R-cuadrado y el error residual para comparación.
+
+```{r}
+y <- datos$mpg
+yhat <- predict(modspline5, datos$horsepower)$y
+SSres <- sum((y - yhat)^2)
+SStot <- sum((y - mean(y))^2)
+rsq <- 1 - (SSres / SStot)
+
+rmse <- sqrt(mean((y - yhat)^2))
+
+cat("R-cuadrado:", round(rsq, 3), "\n")
+cat("Error_residual:", round(rmse, 3), "\n")
+```
+
+Observamos que no hay normalidad entre los residuos.
+
+```{r}
+plot(fitdist(y - yhat,distr = 'norm'))
+lillie.test(y - yhat)
+```
+
+**Gráfico de puntos y todos los splines ajustados**
+
+Finalmente se dibujan los puntos originales con todos los modelos ajustados (cúbico,natural,smooth(spar= 0,26, 0,10 y 0,65))
+
+```{r}
+plot(x = datos$horsepower, y =datos$mpg, pch = 20, col = "red")
+title("Splines")
+lines(modspline3, col = "red", lwd = 2)
+lines(modspline4, col = "yellow", lwd = 2)
+lines(modspline5, col = "black", lwd = 2)
+lines(x = npuntos$horsepower, npredic$fit, col = "green", lwd = 2)
+lines(x = npuntos2$horsepower, npredic2$fit, col = "brown", lwd = 2)
+legend("topright", 
+       legend = c("Spline Cúbica", 
+                  "Spline Natural", 
+                  "Smooth Spline(spar =0,26) ",
+                  "Smooth Spline (spar =0,10)",
+                  "Smooth Spline (spar =0,65)"),
+       col = c("green", "brown", "red", "yellow", "black"), 
+       lwd = 2,
+       bty = "n")
+```
+
+<h4 style="color:#0000FF">
+
+[Resumen: Regresiones polinomial y splines]{.ul}
+
+</h4>
+
+Representamos los residuos de los cuatro modelos juntos.
+Observamos que todos los modelos dan resultados similares.
+No hay homocedasticidad entre los residuos.
+
+```{r}
+par(mfrow = c(1, 4))
+plot(datos$horsepower, datos$mpg - yhat, pch = 20, col = "red", main = "Smooth Spline(0,65)")
+plot(datos$horsepower, resid(modspline), pch = 20, col = "blue", main = "Spline Cúbica")
+plot(datos$horsepower, resid(modspline2), pch = 20, col = "green", main = "Spline Natural")
+plot(datos$horsepower, resid(modelo2), pch = 20, col = "orange", main = "Regresión Polinomial")
+```
+
+```{r}
+resuelto <- data.frame(Model = c("Polinomial", "Spline Cúbica", "Spline Natural","Smooth Spline"),
+                             R_cuadrado = c(summary(modelo2)$r.squared, summary(modspline)$r.squared, summary(modspline2)$r.squared,round(rsq, 3)),
+                            
+                             Error_residual = c("4.373",  "4.331", "4.361","4.201")
+)
+
+print(resuelto)
+```
+
+Hemos ajustado mpg en función de horsepower.
+Hemos hecho regresiones no lineales utilizando bases polinómicas y spline.
+Realizamos regresiones spline utilizando métodos cúbico, natural y smooth.
+
+En la tabla anterior podemos comparar los valores de error residual y R-cuadrado de los cuatro modelos.
+Podemos ver que la regresión polinomial no nos da un buen ajuste en comparación con splines. La regresión polinomial da un valor de R-cuadrado más pequeño y el error residual más alto. Esto se puede entender ya que la regresión polinomial ajusta todo el conjunto de datos mediante una sola función polinomial, mientras que la regresión spline ajusta diferentes secciones del conjunto de datos mediante múltiples polinomios por partes (splines).
+
+Por otro lado, las splines cúbica y natural dan resultados similares y también muestran un buen ajuste.
+Pero el mejor ajuste parece ser con la smooth spline con un valor de R-cuadrado de 0,71, lo que indica que explica el 71 % de la varianza en la determinación de mpg. También su error residual (4,201) es el menor entre los cuatro modelos.
+
+
+Ninguno de los modelos anteriores (no lineales) muestran signos de normalidad.
+El **smooth spline** en general parece ajustarse mejor entre todos ellos, tal y como se puede confirmar con la gráfica también.
+
+```{r}
+plot(x = datos$horsepower, y =datos$mpg, pch = 20, col = "red")
+title("Smooth Spline")
+lines(modspline5, col = "black", lwd = 2)
+legend("topright", 
+       legend = c("smooth spline (spar =0,65)"), 
+       col = c("black"), 
+       lwd = 2,
+       bty = "n")
+```
+
+
+
+::: {.tocify-extend-page data-unique="tocify-extend-page" style="height: 0;"}
+:::
