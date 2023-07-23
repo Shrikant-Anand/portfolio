@@ -1,7 +1,6 @@
 ---
 title: <span style="color:#0000FF">Predictive Modelling</span>
 author: <span style="color:#0000FF">Shrikant Anand</span>
-date: "17/03/2023"
 output: 
   html_document:
     theme: yeti
